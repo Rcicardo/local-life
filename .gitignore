@@ -1,0 +1,9 @@
+# IDEA 配置，不上传仓库
+.idea/
+*.iml
+out/
+# Java 编译产物
+target/
+# 日志、环境文件
+*.log
+.env
