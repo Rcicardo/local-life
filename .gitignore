@@ -7,3 +7,10 @@ target/
 # 日志、环境文件
 *.log
 .env
+
+
+# 忽略所有Word文档
+*.docx
+*.doc
+# Word临时缓存
+~$*.doc*
