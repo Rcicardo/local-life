@@ -6,6 +6,7 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.UserHolder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,7 @@ import javax.servlet.http.HttpSession;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private  StringRedisTemplate stringRedisTemplate;
@@ -36,18 +38,23 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         if (StrUtil.isBlank(token)) {
             return true;
         }
-        String userKey = RedisConstants.LOGIN_USER_KEY + token;
-        Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(userKey);
-        //3.判断用户是否存在
-        if(map.isEmpty()) {
-            return true;
+        try {
+            String userKey = RedisConstants.LOGIN_USER_KEY + token;
+            Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(userKey);
+            //3.判断用户是否存在
+            if(map.isEmpty()) {
+                return true;
+            }
+            //5.将查询到Hash数据转换为userDTO对象
+            UserDTO userDTO = BeanUtil.fillBeanWithMap(map, new UserDTO(), false);
+            //6.存在，保存用户信息到ThreadLocal
+            UserHolder.saveUser(userDTO);
+            //7.刷新有效期
+            stringRedisTemplate.expire(userKey,30, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            // Redis 异常时降级放行，不阻断请求
+            log.error("Redis异常，降级处理", e);
         }
-        //5.将查询到Hash数据转换为userDTO对象
-        UserDTO userDTO = BeanUtil.fillBeanWithMap(map, new UserDTO(), false);
-        //6.存在，保存用户信息到ThreadLocal
-        UserHolder.saveUser(userDTO);
-        //7.刷新有效期
-        stringRedisTemplate.expire(userKey,30, TimeUnit.MINUTES);
         //放行
         return true;
     }

@@ -2,6 +2,7 @@ package com.hmdp.mq.consumer;
 
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.utils.MqConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -12,7 +13,7 @@ import javax.annotation.Resource;
 @Slf4j
 @Component
 @RocketMQMessageListener(
-        topic = "seckill_order_topic",
+        topic = MqConstants.SECKILL_ORDER_TOPIC,
         consumerGroup = "seckill_order_group"
 )
 public class SeckillOrderConsumer implements RocketMQListener<VoucherOrder> {

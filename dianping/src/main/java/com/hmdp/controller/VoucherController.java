@@ -13,7 +13,7 @@ import javax.annotation.Resource;
  *  前端控制器
  * </p>
  *
- * @author 虎哥
+ * @author
  * @since 2021-12-22
  */
 @RestController
@@ -30,7 +30,7 @@ public class VoucherController {
      */
     @PostMapping
     public Result addVoucher(@RequestBody Voucher voucher) {
-        voucherService.addSeckillVoucher(voucher);
+        voucherService.save(voucher);
         return Result.ok(voucher.getId());
     }
 

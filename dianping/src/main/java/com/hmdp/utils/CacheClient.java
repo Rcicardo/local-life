@@ -192,6 +192,19 @@ public class CacheClient {
 
     */
 
+
+    /**
+     * 逻辑过期策略：二级缓存增强版，解决缓存击穿问题
+     * @param keyPrefix
+     * @param id
+     * @param type
+     * @param dbFallback
+     * @param time
+     * @param unit
+     * @return
+     * @param <R>
+     * @param <ID>
+     */
     public <R, ID> R queryWithLogicalExpire(
             String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
 

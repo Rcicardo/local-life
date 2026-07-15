@@ -6,6 +6,7 @@ import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.utils.MqConstants;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
@@ -55,10 +56,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
      * 脚本初始化
      */
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+    private static final DefaultRedisScript<Long> SECKILL_ROLLBACK_SCRIPT;
     static {
         SECKILL_SCRIPT=new DefaultRedisScript<>();
         SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
         SECKILL_SCRIPT.setResultType(Long.class);
+
+        SECKILL_ROLLBACK_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_ROLLBACK_SCRIPT.setLocation(new ClassPathResource("seckill_rollback.lua"));
+        SECKILL_ROLLBACK_SCRIPT.setResultType(Long.class);
     }
 
 //    //阻塞队列，线程从中获取时，如果为空，则线程阻塞
@@ -186,6 +192,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 lock.unlock();
             }
         }*/
+
+    /**
+     * 秒杀下单，实际创建订单又通过消息队列异步处理
+     */
     private IVoucherOrderService proxy;
     @Override
     public Result seckillVoucher(Long voucherId) {
@@ -205,13 +215,19 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             r = result.intValue();
         }
         if(r!=0){
-            //2.1.不为0，代表没有购买资格
-            return Result.fail(r==1?"库存不足":"不能重复下单");
+            if (r == 1) {
+                return Result.fail("库存不足");
+            } else if (r == -1) {
+                return Result.fail("该优惠券不存在或未上架");
+            } else {
+                return Result.fail("不能重复下单");
+            }
         }
 //        //3.获取代理对象
 //        proxy = (IVoucherOrderService) AopContext.currentProxy();
 //        //4.返回订单id
 //        return Result.ok(orderId);
+
         // 6. 走到这里说明 r == 0，即：Redis 预扣库存成功 + 资格校验通过
         // 封装订单对象，准备发往 RocketMQ
         VoucherOrder voucherOrder = new VoucherOrder();
@@ -220,18 +236,19 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         voucherOrder.setVoucherId(voucherId);
 // 直接发送对象，RocketMQ Starter 会自动帮你转 JSON
         try {
-            // 7. 发送异步消息
-            // 参数一：Topic 名字，建议在常量类里定义
-            // 参数二：订单对象，RocketMQTemplate 会自动将其转为 JSON 字符串发送
-            rocketMQTemplate.syncSendOrderly(
-                    "seckill_order_topic",
-                    voucherOrder,
-                    String.valueOf(voucherOrder.getVoucherId()) // 这是一个“路标”
+            rocketMQTemplate.syncSend(
+                    MqConstants.SECKILL_ORDER_TOPIC,
+                    voucherOrder
             );
         } catch (Exception e) {
-            log.error("发送 RocketMQ 消息失败，订单ID：{}", orderId, e);
-            // 这里其实可以不抛异常，通过后续的补偿机制处理，但为了严谨先保留
-            throw new RuntimeException("发送订单消息失败");
+            log.error("发送 RocketMQ 消息失败，执行补偿回滚，订单ID：{}", orderId, e);
+            // 补偿：回滚 Redis 中的库存和用户记录
+            stringRedisTemplate.execute(
+                    SECKILL_ROLLBACK_SCRIPT,
+                    Collections.emptyList(),
+                    voucherId.toString(), userId.toString()
+            );
+            throw new RuntimeException("发送订单消息失败，已回滚库存");
         }
         // 3. 返回订单号给前端（实际下单异步处理）
         return Result.ok(orderId);

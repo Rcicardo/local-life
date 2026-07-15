@@ -14,10 +14,7 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.hmdp.utils.CacheClient;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisData;
-import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
@@ -119,8 +116,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return Result.fail("服务暂时不可用，请稍后再试");
     }
 
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR= Executors.newFixedThreadPool(10);
-      /*   public Shop queryWithLogicalExpire(Long id)   {
+//    private static final ExecutorService CACHE_REBUILD_EXECUTOR= Executors.newFixedThreadPool(10);
+//      /*   public Shop queryWithLogicalExpire(Long id)   {
 //        //1.尝试从Redis查询商铺缓存
 //        String shopJson = stringRedisTemplate.opsForValue().get(RedisConstants.CACHE_SHOP_KEY + id);
 //        //2.判断缓存是否存在
@@ -285,7 +282,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         try {
             // 使用 syncSend 或 convertAndSend 均可
             // Topic 建议定义在常量类中，例如 MqConstants.SHOP_CACHE_TOPIC
-            rocketMQTemplate.convertAndSend("SHOP_CACHE_DROP_TOPIC", key);
+            rocketMQTemplate.convertAndSend(MqConstants.SHOP_CACHE_TOPIC, key);
             log.info("已发送缓存失效广播，Key: {}", key);
         } catch (Exception e) {
             // 缓存同步失败不应阻断数据库事务，记录日志即可
