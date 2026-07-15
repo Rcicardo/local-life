@@ -5,6 +5,7 @@ import com.hmdp.utils.MqConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.apache.rocketmq.spring.annotation.MessageModel;
 
@@ -22,10 +23,16 @@ public class CacheDropConsumer implements RocketMQListener<String> {
     @Resource
     private CacheClient cacheClient;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public void onMessage(String cacheKey) {
         log.info("监听到缓存失效通知，正在清理本地缓存: {}", cacheKey);
-        // 调用我们之前在 CacheClient 中定义的清理方法
+        // 1. 删除 Redis（二级缓存）
+        stringRedisTemplate.delete(cacheKey);
+        // 2. 删除 Caffeine（一级缓存）
         cacheClient.invalidateLocal(cacheKey);
+
     }
 }

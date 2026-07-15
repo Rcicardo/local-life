@@ -101,19 +101,17 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     // 2. 兜底处理方法（限流后自动触发）
 // 注意：参数列表必须和原方法一致，最后再多加一个 BlockException
     public Result handleFlow(Long id, BlockException ex) {
-        // 这里做类型判断
         if (ex instanceof DegradeException) {
-            System.out.println(">>> [Sentinel 真正触发了熔断] ID: " + id);
-        } else {
-            System.out.println(">>> [Sentinel 触发了普通限流] ID: " + id);
+            log.warn("[Sentinel 熔断] queryShopById 被熔断，id={}", id);
+            return Result.fail("服务暂时不可用，请稍后再试");
         }
-        return Result.fail("服务器拥挤");
+        log.warn("[Sentinel 限流] queryShopById 被限流，id={}", id);
+        return Result.fail("服务器拥挤，请稍后再试");
     }
 
-    // 熔断后的处理（逻辑和 handleFlow 类似，但语义不同）
     public Result handleFallback(Long id) {
-        System.out.println(">>> [Sentinel 触发熔断降级] ID: " + id);
-        return Result.fail("服务暂时不可用，请稍后再试");
+        log.error("[Sentinel fallback] queryShopById 业务异常，id={}", id);
+        return Result.fail("系统异常，请稍后再试");
     }
 
 //    private static final ExecutorService CACHE_REBUILD_EXECUTOR= Executors.newFixedThreadPool(10);
@@ -276,7 +274,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         updateById(shop);
         // 2. 删除 Redis 缓存（二级缓存）
         String key = CACHE_SHOP_KEY + id ;
-        stringRedisTemplate.delete(key);
+//        stringRedisTemplate.delete(key);
 
         // 3. 发送异步广播消息，清理所有 JVM 节点的本地缓存（一级缓存）
         try {
